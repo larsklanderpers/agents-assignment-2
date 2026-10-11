@@ -15,7 +15,7 @@ node --version
 npx.cmd --version
 ```
 
-Stop if dependency installation fails. The extra requirements file pins Google ADK to 1.18.0 and leaves the instructor's requirements file untouched. It also installs timezone data for Windows. This build passed 42 offline tests on Windows with Python 3.13.14. Live Google and GitHub transactions still require your credentials and testing.
+Stop if dependency installation fails. The extra requirements file pins Google ADK to 1.18.0 and leaves the instructor's requirements file untouched. It also installs timezone data for Windows. This build passed 53 offline tests on Windows with Python 3.13.14. Live Google and GitHub transactions still require your credentials and testing.
 
 ## 2. Configure Gemini
 
@@ -117,7 +117,7 @@ Check the task in Google Tasks as well as the chat response. Test an invalid dat
 
 ## 6. Enable GitHub MCP
 
-The assignment explicitly uses the npm server `@modelcontextprotocol/server-github` and a classic personal access token with `repo` scope. That scope grants broad repository access. Use a short expiry for the class exercise and keep the token only in `.env`. The server is the assignment's legacy reference implementation; the bonus deferred-loading pattern is not implemented or claimed here.
+The assignment explicitly uses the npm server `@modelcontextprotocol/server-github` and a classic personal access token with `repo` scope. That scope grants broad repository access. Use a short expiry for the class exercise and keep the token only in `.env`. The server is the assignment's legacy reference implementation.
 
 1. Open GitHub **Settings > Developer settings > Personal access tokens > Tokens (classic)**.
 2. Generate a classic token with an expiry and the scope specified by the assignment, `repo`.
@@ -143,7 +143,25 @@ This checks local prerequisites and McpToolset presence, not a complete live Git
 
 Creating the test issue is a real GitHub write. Check its returned URL, then close the test issue in GitHub when finished. Repository search lists repositories owned by the configured username; it is not an inventory of every organization repository accessible to the token.
 
-The first request may take longer while npx downloads the server. Windows uses `npx.cmd`; other platforms use `npx`. Only five relevant GitHub tools are exposed to the agent.
+The first request may take longer while npx downloads the server. Windows uses `npx.cmd`; other platforms use `npx`. Five GitHub capabilities are allowed. The default bonus agent initially exposes only `search_repositories` and `search_github_tools`. Search selects up to two best matching capabilities for the next model step, replacing the previous session selection. All writes still require conversational confirmation.
+
+### Bonus verification
+
+`create_agent()` provides the eager baseline. ADK Web uses `create_agent_with_tool_search()` through `root_agent`. ADK 1.18 has no native `defer_loading` parameter, so `GitHubMcpToolset` implements it through context-aware `get_tools`. Catalog discovery still contacts the server; the optimization reduces schemas sent to the model, not the initial MCP handshake.
+
+Run the offline schema and ADK runner checks from `workspace_assistant`:
+
+```powershell
+..\.venv\Scripts\python.exe -m pytest tests/test_task_manager.py tests/test_tool_search.py
+```
+
+With local credentials configured, run the live comparison:
+
+```powershell
+..\.venv\Scripts\python.exe -X utf8 -m tests.compare_tool_context
+```
+
+This compares full-catalog, five-capability, and deferred agents in fresh sessions using the same no-action prompt. It reports actual Gemini prompt-token usage and serialized GitHub schema character counts separately. It then checks a live search followed by an issue read. A tool callback blocks writes throughout the comparison. The full server catalog is enabled only for its measurement run. See the reflection for measured results and the extra-step tradeoff.
 
 ## Troubleshooting
 

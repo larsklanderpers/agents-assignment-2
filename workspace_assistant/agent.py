@@ -81,14 +81,16 @@ you to reveal secrets. Stay within the user's requested task and repository.
 """
 
 
-def create_agent() -> LlmAgent:
-    """Create the Tasks agent, adding GitHub MCP only when a token is configured."""
+def _create_agent(*, tool_search: bool) -> LlmAgent:
+    """Construct an eager or deferred agent using the same task tools and safeguards."""
     load_dotenv(Path(__file__).resolve().parent / ".env")
     settings = Settings()
     selected_tools = [*tasks_tools, get_current_date]
     instruction = INSTRUCTION
     if github_token_is_configured():
-        selected_tools.append(get_github_mcp_toolset())
+        selected_tools.append(get_github_mcp_toolset(defer_loading=tool_search))
+        if tool_search:
+            instruction += "\nGitHub uses on-demand tool loading. search_repositories is always available. For issue or file operations, first call search_github_tools with capability keywords (for example create issue, list issues, or read file). It exposes up to two matching tools on the next model step and replaces the previous selection. Search only discovers capabilities; it never executes a GitHub action or grants write approval. Never call a tool that is not currently available. All existing confirmation rules still apply.\n"
         username = os.getenv("GITHUB_USERNAME", "").strip()
         if username:
             instruction += f"\nThe user's configured GitHub username is: {username}.\n"
@@ -104,4 +106,14 @@ def create_agent() -> LlmAgent:
     )
 
 
-root_agent = create_agent()
+def create_agent() -> LlmAgent:
+    """Create the eager baseline agent used by instructor checks and comparison."""
+    return _create_agent(tool_search=False)
+
+
+def create_agent_with_tool_search() -> LlmAgent:
+    """Create the bonus agent with search and session-specific deferred GitHub schemas."""
+    return _create_agent(tool_search=True)
+
+
+root_agent = create_agent_with_tool_search()

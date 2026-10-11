@@ -4,7 +4,7 @@
 **Option:** B - Tasks
 **Date:** October 11, 2026
 
-*Required Tasks and GitHub MCP workflows were live-tested. The optional tool-search bonus is deferred.*
+*Required Tasks, GitHub MCP, and the optional tool-search bonus were live-tested.*
 
 ---
 
@@ -56,7 +56,7 @@ An uncertain write is particularly important. If a request times out, the task m
 
 ### Verification so far
 
-On the laptop, 42 offline tests passed, the instructor's Part 1 checks passed 8/8, and dependency checks passed. ADK Web started and discovered the agent. A live Gemini request called the date tool and returned the correct date in the configured Los Angeles timezone. A direct Google Tasks API read succeeded after setup was corrected.
+On the laptop, 53 offline tests passed, the instructor's Part 1 checks passed 8/8, and dependency checks passed. ADK Web started and discovered the agent. A live Gemini request called the date tool and returned the correct date in the configured Los Angeles timezone. A direct Google Tasks API read succeeded after setup was corrected.
 
 I also created three sample tasks during live testing and checked that they appeared in my Google Calendar view. In a later visible ADK Web test, the agent listed those tasks, proposed a disposable task due tomorrow, and waited for confirmation before creating it. The Google API confirmed its notes, date, and pending status. A proposed notes update was canceled; both the API state and tool-call history confirmed that no update occurred. After a fresh proposal and confirmation, the notes changed while the title and date stayed intact. Completion also waited for confirmation, and the completed task appeared in a subsequent listing.
 
@@ -64,7 +64,27 @@ A separate live pagination check returned different tasks on consecutive pages. 
 
 For GitHub MCP, live repository searches and issue reads returned results. Issue creation initially failed because Issues were disabled on the target repository. A direct GitHub API check confirmed that setting. After it was enabled, the agent successfully created issue #2 in `larsklanderpers/agents-assignment-2`, titled "Change primary language from Python to COBOL." That deliberately implausible change request was test data, not a plan to rewrite this project. The session records contain the successful MCP response and the issue URL.
 
-The initial MCP invocation error also exposed a code defect: the discovery-only error handler did not catch a rejected tool call, so the agent could not explain the actual failure. A call-error callback now maps that rejection to an actionable message; four added regression checks pass. That specific failure path still needs a live retest after the server reloads the fix. The successful issue creation verifies the required write workflow, while the regression tests cover the corrected error handling. The optional tool-search bonus is deferred, and no token-reduction comparison is claimed.
+The initial MCP invocation error also exposed a code defect: the discovery-only error handler did not catch a rejected tool call, so the agent could not explain the actual failure. A call-error callback now maps that rejection to an actionable message; four added regression checks pass. That specific failure path still needs a live retest after the server reloads the fix. The successful issue creation verifies the required write workflow, while the regression tests cover the corrected error handling.
+
+### Bonus: Tool search and context comparison
+
+I kept repository search always available and added `search_github_tools` to find the other supported capabilities. `create_agent_with_tool_search()` configures `GitHubMcpToolset` with `defer_loading=True`. The installed ADK 1.18 does not accept that argument on its base `McpToolset`, so the subclass implements schema selection through `get_tools(context)`. It still uses the real MCP connection and tools. The server catalog is discovered locally, while the model initially receives only repository search and tool search.
+
+Search loads up to two best matches for the next model step. A new search replaces the previous selection, and that selection belongs to the session. Loading a tool does not execute it or approve a write. The original confirmation instructions remain in place.
+
+I ran fresh agents with the same short request: "Do not call any tools. Reply with just Ready." The full-catalog comparison temporarily removed the allowlist; it was a measurement run, not the production configuration. These are Gemini's returned prompt-token counts, including the task tools, system instructions, GitHub schemas, and user message:
+
+| Configuration | GitHub schemas initially loaded | Prompt tokens |
+|---|---:|---:|
+| Without deferral, full server catalog | 26 | 5,593 |
+| Without deferral, existing capability allowlist | 5 | 2,451 |
+| With deferral | 2: repository search and tool search | 2,176 |
+
+The reduction against the full catalog is `(5,593 - 2,176) / 5,593 × 100 = 61.09%`. Against the existing five-tool allowlist, it is **11.22%**. The assignment's approximate 80% example is not what this whole-prompt measurement produced. Serialized GitHub schema size fell from 13,654 to 866 characters, or **93.66%**, but characters are not tokens. Fixed task tools and instructions remain in every prompt, and the deferred agent also needs instructions explaining search.
+
+A separate live read asked for open issues. Gemini first called `search_github_tools`, then used the newly loaded `list_issues` tool successfully. An offline ADK runner test verifies that same transition with a scripted model. Other tests cover session isolation, replacing selections, missing matches, invalid searches, and connection failure. The reproducible read-only comparison is `python -m tests.compare_tool_context` from `workspace_assistant`.
+
+There is a tradeoff: discovery adds a model step, and conversation history grows after each tool result. A smaller initial prompt does not guarantee lower total tokens or lower latency for every conversation. I would measure the actual workload before treating deferral as a universal improvement.
 
 ---
 
