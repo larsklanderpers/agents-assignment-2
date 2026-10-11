@@ -1,0 +1,4 @@
+# Keep the supplied requirements intact; use a known ADK API surface for this build.
+-r requirements.txt
+google-adk==1.18.0
+tzdata>=2025.2

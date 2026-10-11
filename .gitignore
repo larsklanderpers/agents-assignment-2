@@ -1,5 +1,6 @@
 # Credentials (NEVER commit these)
 config/credentials/*.json
+workspace_assistant/config/credentials/*.json
 
 # Environment
 .env
@@ -14,6 +15,9 @@ __pycache__/
 venv/
 env/
 .venv/
+
+# ADK local sessions and artifacts
+.adk/
 
 # IDE
 .idea/
