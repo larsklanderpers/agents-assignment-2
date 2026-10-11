@@ -46,6 +46,14 @@ The completed code was on another computer. On the laptop, the existing reposito
 
 Live testing also encountered a temporary Gemini high-demand error. I chose to pin the assignment to `gemini-3.5-flash`, after checking that it was available to my key. This project has about 48 hours left in its immediate life cycle; model lifecycle management can be revisited if it becomes a longer-lived application. The pin is a practical choice for the exercise, not a guarantee against service failures.
 
+### Challenge 3: The assignment's defer_loading argument was missing from the installed ADK
+
+The bonus instructions called for `McpToolset(defer_loading=True)`. I could not find that argument in the installed ADK 1.18 constructor, and checking its source confirmed that it was not supported there. I could not implement the requested pattern by passing the argument to the supplied class.
+
+I used a subclass, `GitHubMcpToolset`, which accepts `defer_loading` and implements the behavior through `get_tools(context)`. The model starts with repository search and tool search. A search records the selected capabilities in session state, and ADK receives their schemas on the next model step. The underlying connection and executable tools are still provided by the real MCP toolset.
+
+That was the practical workaround for the version used in this assignment. It is a custom implementation of the pattern, not a claim that ADK 1.18 has a native defer-loading switch. Both an offline ADK runner test and a live Gemini conversation verified that search could expose a tool and that the next step could use it.
+
 ---
 
 ## Error Handling Approach
@@ -74,13 +82,13 @@ Search loads up to two best matches for the next model step. A new search replac
 
 I ran fresh agents with the same short request: "Do not call any tools. Reply with just Ready." The full-catalog comparison temporarily removed the allowlist; it was a measurement run, not the production configuration. These are Gemini's returned prompt-token counts, including the task tools, system instructions, GitHub schemas, and user message:
 
-| Configuration | GitHub schemas initially loaded | Prompt tokens |
-|---|---:|---:|
-| Without deferral, full server catalog | 26 | 5,593 |
-| Without deferral, existing capability allowlist | 5 | 2,451 |
-| With deferral | 2: repository search and tool search | 2,176 |
+| Configuration | GitHub schemas initially loaded | Prompt tokens | Tokens saved by deferral | Reduction |
+|---|---:|---:|---:|---:|
+| Without deferral, full server catalog | 26 | 5,593 | 3,417 | 61.09% |
+| Without deferral, existing capability allowlist | 5 | 2,451 | 275 | 11.22% |
+| With deferral | 2: repository search and tool search | 2,176 | Baseline for savings | — |
 
-The reduction against the full catalog is `(5,593 - 2,176) / 5,593 × 100 = 61.09%`. Against the existing five-tool allowlist, it is **11.22%**. The assignment's approximate 80% example is not what this whole-prompt measurement produced. Serialized GitHub schema size fell from 13,654 to 866 characters, or **93.66%**, but characters are not tokens. Fixed task tools and instructions remain in every prompt, and the deferred agent also needs instructions explaining search.
+The reduction against the full catalog is `(5,593 - 2,176) / 5,593 × 100 = 61.09%`, saving **3,417 prompt tokens**. Against the existing five-tool allowlist, it is `(2,451 - 2,176) / 2,451 × 100 = 11.22%`, saving **275 prompt tokens**. These are observed differences from one fresh request per configuration, not statistical variance across repeated runs. The assignment's approximate 80% example is not what this whole-prompt measurement produced. Serialized GitHub schema size fell from 13,654 to 866 characters, or **93.66%**, but characters are not tokens. Fixed task tools and instructions remain in every prompt, and the deferred agent also needs instructions explaining search.
 
 A separate live read asked for open issues. Gemini first called `search_github_tools`, then used the newly loaded `list_issues` tool successfully. An offline ADK runner test verifies that same transition with a scripted model. Other tests cover session isolation, replacing selections, missing matches, invalid searches, and connection failure. The reproducible read-only comparison is `python -m tests.compare_tool_context` from `workspace_assistant`.
 
