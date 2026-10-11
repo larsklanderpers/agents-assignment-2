@@ -1,5 +1,6 @@
 # Credentials (NEVER commit these)
 config/credentials/*.json
+workspace_assistant/config/credentials/*.json
 
 # Environment
 .env
@@ -15,12 +16,25 @@ venv/
 env/
 .venv/
 
+# ADK local sessions and artifacts
+.adk/
+workspace_assistant/evalset*.evalset.json
+
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
 .DS_Store
+
+# Local assistant instructions and working notes
+.claude/
+.codex/
+.agents/
+AGENTS.md
+CLAUDE.md
+session_notes.md
+workspace_assistant/docs/implementation_notes.md
 
 # Testing
 .pytest_cache/

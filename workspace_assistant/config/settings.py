@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 class Settings:
     """Application settings."""
 
-    model_name: str = "gemini-3.8-flash"
+    model_name: str = "gemini-3.5-flash"
     google_credentials_path: Optional[Path] = None
     debug_mode: bool = False
     enable_retry: bool = True
@@ -27,7 +27,7 @@ class Settings:
     def __init__(self):
         load_dotenv()
 
-        self.model_name = os.getenv("MODEL_NAME", "gemini-3.8-flash")
+        self.model_name = os.getenv("MODEL_NAME", "gemini-3.5-flash")
         creds_path = os.getenv("GOOGLE_CREDENTIALS_PATH")
         if creds_path:
             self.google_credentials_path = Path(creds_path)
