@@ -15,7 +15,7 @@ node --version
 npx.cmd --version
 ```
 
-Stop if dependency installation fails. The extra requirements file pins Google ADK to 1.18.0 and leaves the instructor's requirements file untouched. It also installs timezone data for Windows. This build passed 53 offline tests on Windows with Python 3.13.14. Live Google and GitHub transactions still require your credentials and testing.
+Stop if dependency installation fails. The extra requirements file pins Google ADK to 1.18.0 and leaves the instructor's requirements file untouched. It also installs timezone data for Windows. This build passed 55 offline tests on Windows with Python 3.13.14. Live Google and GitHub transactions still require your credentials and testing.
 
 ## 2. Configure Gemini
 
@@ -147,7 +147,7 @@ The first request may take longer while npx downloads the server. Windows uses `
 
 ### Bonus verification
 
-`create_agent()` provides the eager baseline. ADK Web uses `create_agent_with_tool_search()` through `root_agent`. ADK 1.18 has no native `defer_loading` parameter, so `GitHubMcpToolset` implements it through context-aware `get_tools`. Catalog discovery still contacts the server; the optimization reduces schemas sent to the model, not the initial MCP handshake.
+`create_agent()` provides the eager baseline. ADK Web uses `create_agent_with_tool_search()` through `root_agent`. ADK 1.18 has no native `defer_loading` parameter, so `GitHubMcpToolset` implements it through context-aware `get_tools`. Catalog discovery still contacts the server; the optimization reduces schemas sent to the model, not the initial MCP handshake. The comparison stops if discovery returns the connection-status fallback, rather than reporting invalid savings. On Windows, the MCP configuration also checks for a single portable Node installation under the user Programs folder if npx is missing from PATH. If Node was recently added to the saved user PATH, restart VS Code to refresh existing terminals.
 
 Run the offline schema and ADK runner checks from `workspace_assistant`:
 

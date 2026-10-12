@@ -2,6 +2,7 @@
 
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
+import os
 
 import pytest
 from google.adk.agents import LlmAgent
@@ -137,3 +138,37 @@ def test_bonus_factory_uses_deferred_mcp_and_keeps_confirmation(monkeypatch):
     assert next(t for t in deferred.tools if isinstance(t, McpToolset)).defer_loading is True
     assert next(t for t in eager.tools if isinstance(t, McpToolset)).defer_loading is False
     assert "Wait for a clear affirmative" in deferred.instruction
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows portable installation")
+def test_portable_node_resolves_when_missing_from_terminal_path(monkeypatch, tmp_path):
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.setenv("PATH", "")
+    monkeypatch.setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "offline-test-token")
+    install = tmp_path / "Programs" / "NodeJS" / "node-v24.14.0-win-x64"
+    install.mkdir(parents=True)
+    (install / "node.exe").touch()
+    (install / "npx.cmd").touch()
+    toolset = github.get_github_mcp_toolset(defer_loading=True)
+    params = toolset._connection_params.server_params
+    assert params.command == str(install / "npx.cmd")
+    assert params.env["PATH"].split(os.pathsep)[0] == str(install)
+    assert os.environ["PATH"] == ""  # Only the MCP child gets the adjusted PATH.
+
+
+@pytest.mark.asyncio
+async def test_comparison_rejects_fallback_before_model_call(monkeypatch, toolset, capsys):
+    from tests import compare_tool_context as comparison
+    fake_agent = SimpleNamespace(tools=[toolset])
+    monkeypatch.setattr(comparison, "create_agent", lambda: fake_agent)
+    monkeypatch.setattr(toolset, "get_tools", AsyncMock(return_value=[
+        FunctionTool(func=github.get_github_connection_status)]))
+    close = AsyncMock()
+    monkeypatch.setattr(toolset, "close", close)
+    runner = AsyncMock()
+    monkeypatch.setattr(comparison, "Runner", runner)
+    with pytest.raises(comparison.ComparisonSetupError, match="No valid token comparison"):
+        await comparison.run_case("full_catalog")
+    runner.assert_not_called()
+    close.assert_awaited_once()
+    assert "prompt_tokens" not in capsys.readouterr().out

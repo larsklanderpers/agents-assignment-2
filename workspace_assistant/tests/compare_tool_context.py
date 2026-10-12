@@ -6,6 +6,7 @@ never credentials, repository contents, or issue bodies. No writes are allowed.
 
 import asyncio
 import json
+import sys
 
 from google.adk.agents.run_config import RunConfig
 from google.adk.runners import Runner
@@ -16,13 +17,25 @@ from google.genai import types
 from agent import create_agent, create_agent_with_tool_search
 
 
+class ComparisonSetupError(ValueError):
+    """A safe, actionable error for an invalid comparison environment."""
+
+
 async def run_case(mode: str, *, verify_search: bool = False) -> dict:
     deferred = mode == "deferred"
     agent = create_agent_with_tool_search() if deferred else create_agent()
-    toolset = next(tool for tool in agent.tools if isinstance(tool, McpToolset))
+    toolset = next((tool for tool in agent.tools if isinstance(tool, McpToolset)), None)
+    if toolset is None:
+        raise ComparisonSetupError("Comparison stopped: configure GITHUB_PERSONAL_ACCESS_TOKEN locally first. No valid token comparison was produced.")
     if mode == "full_catalog":
         # Comparison only: production keeps its five-capability allowlist.
         toolset.tool_filter = None
+    # The application deliberately falls back to a status tool so Tasks keep
+    # working. A benchmark must reject that fallback before spending model tokens.
+    discovered = await toolset.get_tools()
+    if "search_repositories" not in {tool.name for tool in discovered}:
+        await toolset.close()
+        raise ComparisonSetupError("Comparison stopped: GitHub MCP did not connect. Check Node.js/npx availability, internet access, and the local GitHub token. No valid token comparison was produced.")
     requests, calls = [], []
 
     def capture(callback_context, llm_request):
@@ -32,6 +45,8 @@ async def run_case(mode: str, *, verify_search: bool = False) -> dict:
                   if declaration.name not in {
                       "list_task_lists", "list_tasks", "create_task", "complete_task",
                       "update_task", "delete_task", "get_current_date"}]
+        if "get_github_connection_status" in {declaration.name for declaration in github}:
+            raise ComparisonSetupError("Comparison stopped: GitHub MCP fell back to its connection-status tool. No valid token comparison was produced.")
         requests.append({
             "github_schemas": [declaration.name for declaration in github],
             "github_schema_characters": len(json.dumps(
@@ -92,8 +107,19 @@ async def main():
         "allowlist_prompt_reduction_percent": round(100 * (allowlist - deferred) / allowlist, 2),
         "note": "Prompt tokens include system instructions, task tools, GitHub tools, and the same user prompt. Schema characters are a separate size measure, not tokens.",
     }), flush=True)
+    print("\nInitial prompt comparison (tokens):", flush=True)
+    print(f"  Before, full catalog: {baseline:,}", flush=True)
+    print(f"  Before, five-tool allowlist: {allowlist:,}", flush=True)
+    print(f"  After, deferred loading: {deferred:,}", flush=True)
+    print(f"  Savings vs full catalog: {baseline - deferred:,} ({100 * (baseline - deferred) / baseline:.2f}%)", flush=True)
+    print(f"  Savings vs allowlist: {allowlist - deferred:,} ({100 * (allowlist - deferred) / allowlist:.2f}%)", flush=True)
+    print("\nSeparate read-only search verification:", flush=True)
     print(json.dumps(await run_case("deferred", verify_search=True)), flush=True)
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except ComparisonSetupError as error:
+        print(str(error), file=sys.stderr)
+        sys.exit(1)

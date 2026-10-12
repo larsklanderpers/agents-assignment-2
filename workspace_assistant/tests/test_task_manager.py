@@ -203,7 +203,7 @@ def test_mcp_configuration_does_not_start_a_process(monkeypatch):
     github.get_github_mcp_toolset()
     args = factory.call_args.kwargs
     params = args["connection_params"].server_params
-    assert params.command == ("npx.cmd" if os.name == "nt" else "npx")
+    assert Path(params.command).name == ("npx.cmd" if os.name == "nt" else "npx")
     assert params.args == ["-y", "@modelcontextprotocol/server-github"]
     assert params.env["GITHUB_PERSONAL_ACCESS_TOKEN"] == "test-token-not-valid"
     assert {"search_repositories", "list_issues", "create_issue"} <= set(args["tool_filter"])

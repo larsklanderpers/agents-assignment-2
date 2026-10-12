@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import shutil
 from pathlib import Path
 from typing import Optional
 
@@ -147,6 +148,23 @@ def github_token_is_configured() -> bool:
     return bool(token) and not any(marker in token.lower() for marker in ("your_token", "ghp_xxx", "replace_me"))
 
 
+def resolve_npx_command() -> str:
+    """Find npx, including this laptop's portable per-user Windows installation."""
+    command = "npx.cmd" if os.name == "nt" else "npx"
+    located = shutil.which(command)
+    if located:
+        return located
+    if os.name == "nt" and os.getenv("LOCALAPPDATA"):
+        programs = Path(os.environ["LOCALAPPDATA"]) / "Programs"
+        candidates = [programs / "nodejs" / "npx.cmd"]
+        candidates.extend((programs / "NodeJS").glob("node-*-win-*/npx.cmd"))
+        valid = [path for path in candidates if path.is_file() and (path.parent / "node.exe").is_file()]
+        # Avoid choosing between multiple runtimes without an explicit PATH selection.
+        if len(valid) == 1:
+            return str(valid[0])
+    return command
+
+
 def get_github_mcp_toolset(*, defer_loading: bool = False) -> McpToolset:
     """Configure the assignment's GitHub server; connection starts when ADK requests tools.
 
@@ -159,10 +177,15 @@ def get_github_mcp_toolset(*, defer_loading: bool = False) -> McpToolset:
     if not github_token_is_configured():
         raise ValueError("Set GITHUB_PERSONAL_ACCESS_TOKEN in workspace_assistant/.env to enable GitHub MCP.")
 
+    command = resolve_npx_command()
+    server_env = {"GITHUB_PERSONAL_ACCESS_TOKEN": os.environ["GITHUB_PERSONAL_ACCESS_TOKEN"].strip()}
+    if Path(command).is_absolute():
+        # npx itself invokes node; both must resolve in the child process.
+        server_env["PATH"] = str(Path(command).parent) + os.pathsep + os.getenv("PATH", "")
     server_params = StdioServerParameters(
-        command="npx.cmd" if os.name == "nt" else "npx",
+        command=command,
         args=["-y", "@modelcontextprotocol/server-github"],
-        env={"GITHUB_PERSONAL_ACCESS_TOKEN": os.environ["GITHUB_PERSONAL_ACCESS_TOKEN"].strip()},
+        env=server_env,
     )
     return GitHubMcpToolset(
         connection_params=StdioConnectionParams(server_params=server_params, timeout=60),
